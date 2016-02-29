@@ -66,66 +66,73 @@ def draw_sphere(C, r, ax):
     ax.plot_surface(x, y, z, alpha=0.2, rstride=4, cstride=4, color='b', linewidth=0.5)
 
 
-# X, Y, Z = np.transpose(np.reshape(np.fromfile("resources/bun_zipper_res4.xyz", sep=" "), (-1, 3)))
-X, Y, Z = np.transpose(np.reshape(np.fromfile("resources/dragon_vrip.xyz", sep=" "), (-1, 3)))
-W = X ** 2 + Y ** 2 + Z ** 2
-O = np.ones(4)
+def main():
+    # X, Y, Z = np.transpose(np.reshape(np.fromfile("resources/bun_zipper.xyz", sep=" "), (-1, 3)))
+    X, Y, Z = np.transpose(np.reshape(np.fromfile("resources/dragon_vrip.xyz", sep=" "), (-1, 3)))
+    W = X ** 2 + Y ** 2 + Z ** 2
+    O = np.ones(4)
 
-ch = ConvexHull(np.transpose([X, Y, Z, W]))
-simplices = [s for s in ch.vertices if np.linalg.det([X[s], Y[s], Z[s], O]) < 0]
+    ch = ConvexHull(np.transpose([X, Y, Z, W]))
+    simplices = [s for s in ch.vertices if np.linalg.det([X[s], Y[s], Z[s], O]) < 0]
 
-# for s in simplices:
-#     C, r = circumscribed_circle(X[s], Y[s], Z[s], W[s])
-#     for i in range(len(X)):
-#         if not i in s:
-#             v = [X[i], Y[i], Z[i]]
-#             if np.linalg.norm(v - C) < r:
-#                 print(s, i, np.linalg.norm(v - C), r)
+    # for s in simplices:
+    #     C, r = circumscribed_circle(X[s], Y[s], Z[s], W[s])
+    #     for i in range(len(X)):
+    #         if not i in s:
+    #             v = [X[i], Y[i], Z[i]]
+    #             if np.linalg.norm(v - C) < r:
+    #                 print(s, i, np.linalg.norm(v - C), r)
 
-poles = {}
-triangles = {}
-for s in simplices:
-    C, r = circumscribed_circle(X[s], Y[s], Z[s], W[s])
-    for v in s:
-        if not v in poles or poles[v].r < r:
-            poles[v] = Pole(r, C)
-            
-    for a, b, c, d in (0, 1, 2, 3), (0, 2, 3, 1), (0, 1, 3, 2), (1, 2, 3, 0):
-        t_idx = tuple(sorted((s[a], s[b], s[c])))
-        if t_idx in triangles:
-            triangles[t_idx].add_simplex(C, s[d])
-        else:
-            triangles[t_idx] = Triangle(C, s[d])
+    poles = {}
+    triangles = {}
+    for s in simplices:
+        C, r = circumscribed_circle(X[s], Y[s], Z[s], W[s])
+        for v in s:
+            if v not in poles or poles[v].r < r:
+                poles[v] = Pole(r, C)
 
-Nx, Ny, Nz = np.transpose([(np.array(poles[i].c) - np.array([X[i], Y[i], Z[i]])) / poles[i].r if i in poles else [0, 0, 1] for i in range(len(X))])
-    
-def intersection_check(triangle, vertex, echo=False):
-    if triangle.v1 is None:
-        return False
-    
-    v = np.array([X[vertex], Y[vertex], Z[vertex]])
-    vn = np.array([Nx[vertex], Ny[vertex], Nz[vertex]])
-    v0, v1 = map(np.array, (triangle.v0, triangle.v1))
-    d0, d1 = sorted(np.dot(vn, r / np.linalg.norm(r)) for r in (v0 - v, v1 - v))
-    if echo:
-        print(d0, d1)
-        
-    if d1 <= -0.38 or d0 >= 0.38:
-        return False
-    
-    return True
+        for a, b, c, d in (0, 1, 2, 3), (0, 2, 3, 1), (0, 1, 3, 2), (1, 2, 3, 0):
+            t_idx = tuple(sorted((s[a], s[b], s[c])))
+            if t_idx in triangles:
+                triangles[t_idx].add_simplex(C, s[d])
+            else:
+                triangles[t_idx] = Triangle(C, s[d])
 
-candidate_triangles = {idx: triangle for idx, triangle in triangles.items() 
-#                        if any(intersection_check(triangle, v) for v in idx + triangle.check_vertices)}
-                       if all(intersection_check(triangle, v) for v in idx)}
+    Nx, Ny, Nz = np.transpose([(np.array(poles[i].c) - np.array([X[i], Y[i], Z[i]])) / poles[i].r
+                               if i in poles else [0, 0, 1] for i in range(len(X))])
 
-# assert len(poles) == len(X)
-    
-with open("dragon.off", "w") as out:
-    out.write("OFF\n")
-    out.write("{} {} 0\n".format(len(X), len(candidate_triangles)))
-    for v in zip(X, Y, Z):
-        out.write("{} {} {}\n".format(*v))
-    for f in candidate_triangles.keys():
-        out.write("3 {} {} {}\n".format(*f))
-    
+    def intersection_check(triangle, vertex, echo=False):
+        if triangle.v1 is None:
+            return False
+
+        v = np.array([X[vertex], Y[vertex], Z[vertex]])
+        vn = np.array([Nx[vertex], Ny[vertex], Nz[vertex]])
+        v0, v1 = map(np.array, (triangle.v0, triangle.v1))
+        d0, d1 = sorted(np.dot(vn, r / np.linalg.norm(r)) for r in (v0 - v, v1 - v))
+        if echo:
+            print(d0, d1)
+
+        if d1 <= -0.38 or d0 >= 0.38:
+            return False
+
+        return True
+
+    candidate_triangles = {idx: triangle for idx, triangle in triangles.items()
+                           if all(intersection_check(triangle, v) for v in idx)}
+
+    with open("test.off", "w") as out:
+        out.write("OFF\n")
+        out.write("{} {} 0\n".format(len(X), len(candidate_triangles)))
+        for v in zip(X, Y, Z):
+            out.write("{} {} {}\n".format(*v))
+        for f in candidate_triangles.keys():
+            idx = list(f)
+            p0, p1, p2 = np.transpose([X[idx], Y[idx], Z[idx]])
+            n = [sum(Nx[idx]), sum(Ny[idx]), sum(Nz[idx])]
+            if np.linalg.det([p1 - p0, p2 - p0, n]) < 0:
+                idx = reversed(idx)
+            out.write("3 {} {} {}\n".format(*idx))
+
+
+if __name__ == "__main__":
+    main()
