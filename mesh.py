@@ -163,15 +163,20 @@ def main():
             for a in adj:
                 j = next(j for j in range(3) if tuple(sorted((a[j-1], a[j]))) == e)
                 res = tuple(a)
-                # if len(adj) == 1 and (trg[i - 1], trg[i]) == (a[j - 1], a[j]):
-                #     res = tuple(reversed(res))
-                # elif len(adj) > 1:
-                idx1, idx2 = list(trg), list(a)
-                p, r = (np.transpose([X[idx1], Y[idx1], Z[idx1]]),
-                        np.transpose([X[idx2], Y[idx2], Z[idx2]]))
-                if (np.linalg.det([p[1] - p[0], p[2] - p[0], r[j-2] - p[0]]) *
-                        np.linalg.det([r[1] - r[0], r[2] - r[0], p[i-2] - r[0]]) > 0):
+                if len(adj) == 1 and (trg[i - 1], trg[i]) == (a[j - 1], a[j]):
                     res = tuple(reversed(res))
+                elif len(adj) > 1:
+                    # idx1, idx2 = list(trg), list(a)
+                    # p, r = (np.transpose([X[idx1], Y[idx1], Z[idx1]]),
+                    #         np.transpose([X[idx2], Y[idx2], Z[idx2]]))
+                    # if (np.linalg.det([p[1] - p[0], p[2] - p[0], r[j-2] - p[0]]) *
+                    #         np.linalg.det([r[1] - r[0], r[2] - r[0], p[i-2] - r[0]]) > 0):
+                    #     res = tuple(reversed(res))
+                    idx = list(a)
+                    p0, p1, p2 = np.transpose([X[idx], Y[idx], Z[idx]])
+                    n = [sum(Nx[idx]), sum(Ny[idx]), sum(Nz[idx])]
+                    if np.linalg.det([p1 - p0, p2 - p0, n]) < 0:
+                        res = tuple(reversed(res))
 
                 queue.append(res)
                 result.append(res)
