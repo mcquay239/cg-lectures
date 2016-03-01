@@ -66,7 +66,7 @@ def draw_sphere(C, r, ax):
 
 
 def main():
-    X, Y, Z = np.transpose(np.reshape(np.fromfile("resources/bun_zipper.xyz", sep=" "), (-1, 3)))
+    X, Y, Z = np.transpose(np.reshape(np.fromfile("resources/bun_zipper_res4.xyz", sep=" "), (-1, 3)))
     # X, Y, Z = np.transpose(np.reshape(np.fromfile("resources/dragon_vrip.xyz", sep=" "), (-1, 3)))
     W = X ** 2 + Y ** 2 + Z ** 2
     O = np.ones(4)
@@ -132,23 +132,71 @@ def main():
     candidate_triangles = {idx: triangle for idx, triangle in triangles.items()
                            if all(intersection_check(triangle, v, idx) for v in idx)}
 
+    em = {}
+    for idx in candidate_triangles.keys():
+        for i in range(3):
+            e = tuple(sorted((idx[i - 1], idx[i])))
+            if e not in em:
+                em[e] = [tuple(idx)]
+            else:
+                em[e].append(tuple(idx))
+
+    conv_triangles = [(idx, triangle.incident_vertex) for idx, triangle in candidate_triangles.items()
+                      if triangle.v1 is None]
+    visited = set(idx for idx, _ in conv_triangles)
+    result = []
+    for f, incident in conv_triangles:
+        idx = list(f)
+        p0, p1, p2 = np.transpose([X[idx], Y[idx], Z[idx]])
+        ov = np.array([t[incident] for t in (X, Y, Z)])
+        if np.linalg.det([p1 - p0, p2 - p0, ov - p0]) > 0:
+            idx = reversed(idx)
+        result.append(tuple(idx))
+
+    queue = result[:]
+    while queue:
+        trg = queue.pop(0)
+        for i in range(3):
+            e = tuple(sorted((trg[i - 1], trg[i])))
+            adj = [t for t in em[e] if t not in visited]
+
+            for a in adj:
+                j = next(j for j in range(3) if tuple(sorted((a[j-1], a[j]))) == e)
+                res = tuple(a)
+                # if len(adj) == 1 and (trg[i - 1], trg[i]) == (a[j - 1], a[j]):
+                #     res = tuple(reversed(res))
+                # elif len(adj) > 1:
+                idx1, idx2 = list(trg), list(a)
+                p, r = (np.transpose([X[idx1], Y[idx1], Z[idx1]]),
+                        np.transpose([X[idx2], Y[idx2], Z[idx2]]))
+                if (np.linalg.det([p[1] - p[0], p[2] - p[0], r[j-2] - p[0]]) *
+                        np.linalg.det([r[1] - r[0], r[2] - r[0], p[i-2] - r[0]]) > 0):
+                    res = tuple(reversed(res))
+
+                queue.append(res)
+                result.append(res)
+
+            visited.update(adj)
+
     with open("test.off", "w") as out:
         out.write("OFF\n")
         out.write("{} {} 0\n".format(len(X), len(candidate_triangles)))
         for v in zip(X, Y, Z):
             out.write("{} {} {}\n".format(*v))
-        for f, trg in candidate_triangles.items():
-            idx = list(f)
-            p0, p1, p2 = np.transpose([X[idx], Y[idx], Z[idx]])
-            if trg.v1 is None:
-                ov = np.array([t[trg.incident_vertex] for t in (X, Y, Z)])
-                if np.linalg.det([p1 - p0, p2 - p0, ov - p0]) > 0:
-                    idx = reversed(idx)
-            else:
-                n = [sum(Nx[idx]), sum(Ny[idx]), sum(Nz[idx])]
-                if np.linalg.det([p1 - p0, p2 - p0, n]) < 0:
-                    idx = reversed(idx)
-            out.write("3 {} {} {}\n".format(*idx))
+        # for f, trg in candidate_triangles.items():
+        #     idx = list(f)
+        #     p0, p1, p2 = np.transpose([X[idx], Y[idx], Z[idx]])
+        #     if trg.v1 is None:
+        #         ov = np.array([t[trg.incident_vertex] for t in (X, Y, Z)])
+        #         if np.linalg.det([p1 - p0, p2 - p0, ov - p0]) > 0:
+        #             idx = reversed(idx)
+        #     else:
+        #         n = [sum(Nx[idx]), sum(Ny[idx]), sum(Nz[idx])]
+        #         if np.linalg.det([p1 - p0, p2 - p0, n]) < 0:
+        #             idx = reversed(idx)
+        #     out.write("3 {} {} {}\n".format(*idx))
+        for f in result:
+            out.write("3 {} {} {}\n".format(*f))
 
 
 if __name__ == "__main__":
