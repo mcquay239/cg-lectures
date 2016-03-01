@@ -18,17 +18,16 @@ class Pole:
 
         
 class Triangle:
-    __slots__ = ("v0", "v1", "check_vertices")
+    __slots__ = ("v0", "v1", "incident_vertex")
     
-    def __init__(self, v0, check_vertex):
+    def __init__(self, v0, incident_vertex):
         self.v1 = None
         self.v0 = v0
-        self.check_vertices = (check_vertex, )
+        self.incident_vertex = incident_vertex
         
-    def add_simplex(self, v1, check_vertex):
+    def add_simplex(self, v1):
         assert self.v1 is None
         
-        self.check_vertices = (self.check_vertices[0], check_vertex)
         self.v1 = v1
 
 
@@ -67,8 +66,8 @@ def draw_sphere(C, r, ax):
 
 
 def main():
-    # X, Y, Z = np.transpose(np.reshape(np.fromfile("resources/bun_zipper.xyz", sep=" "), (-1, 3)))
-    X, Y, Z = np.transpose(np.reshape(np.fromfile("resources/dragon_vrip.xyz", sep=" "), (-1, 3)))
+    X, Y, Z = np.transpose(np.reshape(np.fromfile("resources/bun_zipper.xyz", sep=" "), (-1, 3)))
+    # X, Y, Z = np.transpose(np.reshape(np.fromfile("resources/dragon_vrip.xyz", sep=" "), (-1, 3)))
     W = X ** 2 + Y ** 2 + Z ** 2
     O = np.ones(4)
 
@@ -94,21 +93,34 @@ def main():
         for a, b, c, d in (0, 1, 2, 3), (0, 2, 3, 1), (0, 1, 3, 2), (1, 2, 3, 0):
             t_idx = tuple(sorted((s[a], s[b], s[c])))
             if t_idx in triangles:
-                triangles[t_idx].add_simplex(C, s[d])
+                triangles[t_idx].add_simplex(C)
             else:
                 triangles[t_idx] = Triangle(C, s[d])
 
     Nx, Ny, Nz = np.transpose([(np.array(poles[i].c) - np.array([X[i], Y[i], Z[i]])) / poles[i].r
                                if i in poles else [0, 0, 1] for i in range(len(X))])
 
-    def intersection_check(triangle, vertex, echo=False):
-        if triangle.v1 is None:
-            return False
-
+    def intersection_check(triangle, vertex, f, echo=False):
         v = np.array([X[vertex], Y[vertex], Z[vertex]])
         vn = np.array([Nx[vertex], Ny[vertex], Nz[vertex]])
-        v0, v1 = map(np.array, (triangle.v0, triangle.v1))
-        d0, d1 = sorted(np.dot(vn, r / np.linalg.norm(r)) for r in (v0 - v, v1 - v))
+        v0 = np.array(triangle.v0)
+        d0 = np.dot(vn, (v0 - v) / np.linalg.norm(v0 - v))
+
+        if triangle.v1 is None:
+            idx = list(f)
+            p0, p1, p2 = np.transpose([X[idx], Y[idx], Z[idx]])
+            vp1, vp2 = p1 - p0, p2 - p0
+            ov = np.array([t[triangle.incident_vertex] for t in (X, Y, Z)])
+            pr0, pr1 = np.linalg.det([vp1, vp2, v0 - p0]), np.linalg.det([vp1, vp2, ov - p0])
+
+            if pr0 * pr1 >= 0:
+                return True
+
+            return -0.38 < d0 < 0.38
+
+        v1 = np.array(triangle.v1)
+        d1 = np.dot(vn, (v1 - v) / np.linalg.norm(v1 - v))
+        d0, d1 = sorted((d0, d1))
         if echo:
             print(d0, d1)
 
@@ -118,19 +130,24 @@ def main():
         return True
 
     candidate_triangles = {idx: triangle for idx, triangle in triangles.items()
-                           if all(intersection_check(triangle, v) for v in idx)}
+                           if all(intersection_check(triangle, v, idx) for v in idx)}
 
     with open("test.off", "w") as out:
         out.write("OFF\n")
         out.write("{} {} 0\n".format(len(X), len(candidate_triangles)))
         for v in zip(X, Y, Z):
             out.write("{} {} {}\n".format(*v))
-        for f in candidate_triangles.keys():
+        for f, trg in candidate_triangles.items():
             idx = list(f)
             p0, p1, p2 = np.transpose([X[idx], Y[idx], Z[idx]])
-            n = [sum(Nx[idx]), sum(Ny[idx]), sum(Nz[idx])]
-            if np.linalg.det([p1 - p0, p2 - p0, n]) < 0:
-                idx = reversed(idx)
+            if trg.v1 is None:
+                ov = np.array([t[trg.incident_vertex] for t in (X, Y, Z)])
+                if np.linalg.det([p1 - p0, p2 - p0, ov - p0]) > 0:
+                    idx = reversed(idx)
+            else:
+                n = [sum(Nx[idx]), sum(Ny[idx]), sum(Nz[idx])]
+                if np.linalg.det([p1 - p0, p2 - p0, n]) < 0:
+                    idx = reversed(idx)
             out.write("3 {} {} {}\n".format(*idx))
 
 
